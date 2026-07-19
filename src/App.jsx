@@ -554,12 +554,12 @@ _Envoyé depuis le site de réservation CleanNet_`
               </div>
             )}
 
-            {upsells.length > 0 && (
+            {upsells.filter(u => !u.services || u.services.length === 0 || u.services.includes(service?.id)).length > 0 && (
               <>
                 <h3 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 4px" }}>✨ Ajoutez un service complémentaire</h3>
                 <p style={{ color: "#6B7280", fontSize: 14, margin: "0 0 14px" }}>Profitez-en pour combiner vos prestations</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {upsells.map(u => {
+                  {upsells.filter(u => !u.services || u.services.length === 0 || u.services.includes(service?.id)).map(u => {
                     const active = activeUpsells.includes(u.id);
                     return (
                       <button key={u.id} onClick={() => setActiveUpsells(prev => active ? prev.filter(x => x !== u.id) : [...prev, u.id])}
@@ -2023,7 +2023,7 @@ function AdminPanel({ config, onSave, onClose }) {
           {tab === "upsells" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <p style={{ fontSize: 14, color: "#6B7280", margin: "0 0 8px" }}>
-                Les upsells apparaissent à l'étape 2 pour augmenter le panier moyen.
+                Les upsells apparaissent à l'étape 2. Vous pouvez les limiter à certains services.
               </p>
               {cfg.upsells.length === 0 && (
                 <div style={{ textAlign: "center", padding: "32px 16px", background: "#F7F8FC", borderRadius: 12, color: "#9CA3AF", fontSize: 14 }}>
@@ -2031,18 +2031,47 @@ function AdminPanel({ config, onSave, onClose }) {
                 </div>
               )}
               {cfg.upsells.map((u, ui) => (
-                <div key={u.id} style={{ border: "1.5px solid #E5E7EB", borderRadius: 10, padding: "12px 16px", display: "flex", gap: 10, alignItems: "center" }}>
-                  <input value={u.icon} onChange={e => updateUpsell(ui, "icon", e.target.value)}
-                    style={{ ...inputStyle, width: 48, textAlign: "center", fontSize: 18 }} />
-                  <input value={u.name} onChange={e => updateUpsell(ui, "name", e.target.value)}
-                    style={{ ...inputStyle, flex: 1 }} placeholder="Nom de l'upsell" />
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <input type="number" value={u.price} onChange={e => updateUpsell(ui, "price", e.target.value)}
-                      style={{ ...inputStyle, width: 80 }} />
-                    <span style={{ fontSize: 13, color: "#6B7280" }}>€</span>
+                <div key={u.id} style={{ border: "1.5px solid #E5E7EB", borderRadius: 12, padding: "14px 16px" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+                    <input value={u.icon} onChange={e => updateUpsell(ui, "icon", e.target.value)}
+                      style={{ ...inputStyle, width: 48, textAlign: "center", fontSize: 18 }} />
+                    <input value={u.name} onChange={e => updateUpsell(ui, "name", e.target.value)}
+                      style={{ ...inputStyle, flex: 1 }} placeholder="Nom de l'upsell" />
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <input type="number" value={u.price} onChange={e => updateUpsell(ui, "price", e.target.value)}
+                        style={{ ...inputStyle, width: 80 }} />
+                      <span style={{ fontSize: 13, color: "#6B7280" }}>€</span>
+                    </div>
+                    <button onClick={() => removeUpsell(ui)}
+                      style={{ background: "#FEE2E2", border: "none", borderRadius: 6, padding: "7px 10px", color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>✕</button>
                   </div>
-                  <button onClick={() => removeUpsell(ui)}
-                    style={{ background: "#FEE2E2", border: "none", borderRadius: 6, padding: "7px 10px", color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>✕</button>
+                  {/* Sélection des services */}
+                  <div>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: "#6B7280", margin: "0 0 6px" }}>
+                      Afficher pour :
+                    </p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      <button
+                        onClick={() => updateUpsell(ui, "services", [])}
+                        style={{ padding: "4px 10px", fontSize: 12, fontWeight: 600, border: `1.5px solid ${!u.services || u.services.length === 0 ? color : "#E5E7EB"}`, borderRadius: 20, background: !u.services || u.services.length === 0 ? color + "15" : "#fff", color: !u.services || u.services.length === 0 ? color : "#6B7280", cursor: "pointer" }}>
+                        Tous les services
+                      </button>
+                      {cfg.services.map(s => {
+                        const selected = u.services && u.services.includes(s.id);
+                        return (
+                          <button key={s.id}
+                            onClick={() => {
+                              const current = u.services || [];
+                              const next = selected ? current.filter(id => id !== s.id) : [...current, s.id];
+                              updateUpsell(ui, "services", next);
+                            }}
+                            style={{ padding: "4px 10px", fontSize: 12, fontWeight: 600, border: `1.5px solid ${selected ? color : "#E5E7EB"}`, borderRadius: 20, background: selected ? color + "15" : "#fff", color: selected ? color : "#6B7280", cursor: "pointer" }}>
+                            {s.icon} {s.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               ))}
               <button onClick={addUpsell}
