@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   const supabaseUrl = (process.env.SUPABASE_URL || "").replace(/\/rest\/v1\/?$/, "");
   const supabaseKey = process.env.SUPABASE_ANON_KEY;
   const brevoKey = process.env.BREVO_API_KEY;
-  const senderEmail = process.env.SENDER_EMAIL || "contact@cleannet06.fr";
+  const senderEmail = process.env.SENDER_EMAIL || "cleannet06600@gmail.com";
   const ownerEmail = process.env.OWNER_EMAIL || senderEmail;
 
   if (!supabaseUrl || !supabaseKey) {
@@ -38,6 +38,21 @@ export default async function handler(req, res) {
       return resp.ok;
     };
 
+    const sendSMS = async (telephone, text) => {
+      if (!brevoKey || !telephone) return false;
+      let tel = telephone.replace(/\s/g, "").replace(/\./g, "");
+      if (tel.startsWith("0")) tel = "+33" + tel.slice(1);
+      if (!tel.startsWith("+")) tel = "+33" + tel;
+      try {
+        const resp = await fetch("https://api.brevo.com/v3/transactionalSMS/sms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "api-key": brevoKey },
+          body: JSON.stringify({ sender: "CleanNet", recipient: tel, content: text, type: "transactional" }),
+        });
+        return resp.ok;
+      } catch (e) { console.error("SMS error:", e.message); return false; }
+    };
+
     // Email récap au propriétaire
     const ownerHtml = `
       <div style="font-family:Inter,system-ui,sans-serif;max-width:600px;margin:0 auto;background:#F7F8FC;padding:24px;">
@@ -66,10 +81,10 @@ export default async function handler(req, res) {
 
     await sendEmail(ownerEmail, "CleanNet", `📅 ${reservations.length} rendez-vous demain — ${tomorrowStr}`, ownerHtml);
 
-    // Email rappel à chaque client
     let sent = 0;
     for (const rv of reservations) {
       if (!rv.email) continue;
+
       const clientHtml = `
         <div style="font-family:Inter,system-ui,sans-serif;max-width:600px;margin:0 auto;background:#F7F8FC;padding:24px;">
           <div style="background:#0057FF;color:#fff;padding:20px 24px;border-radius:12px 12px 0 0;">
@@ -85,15 +100,24 @@ export default async function handler(req, res) {
                 <tr><td style="padding:6px 0;color:#6B7280;">Adresse</td><td style="font-weight:700;">${rv.adresse || ""}</td></tr>
               </table>
             </div>
-            <p style="font-size:14px;color:#6B7280;">Une question ? 📞 <strong>${process.env.COMPANY_PHONE || "06 00 00 00 00"}</strong></p>
+            <p style="font-size:14px;color:#6B7280;">Une question ? 📞 <strong>${process.env.COMPANY_PHONE || "06 12 92 20 48"}</strong></p>
             <p style="font-size:12px;color:#9CA3AF;text-align:center;">CleanNet Multi-Service 06 · Alpes-Maritimes</p>
           </div>
         </div>`;
+
       await sendEmail(rv.email, `${rv.prenom} ${rv.nom}`, `⏰ Rappel — Votre rendez-vous CleanNet est demain à ${rv.creneau || ""}`, clientHtml);
+
+      // SMS de rappel au client
+      if (rv.telephone) {
+        const smsText = `CleanNet\n⏰ Rappel rdv demain !\n🧹 ${rv.service}\n📅 ${rv.date} à ${rv.creneau?.split(" → ")[0] || ""}\n📍 ${rv.adresse || ""}\nQuestion ? 📞 ${process.env.COMPANY_PHONE || "06 12 92 20 48"}`;
+        await sendSMS(rv.telephone, smsText);
+      }
+
       sent++;
     }
 
     return res.status(200).json({ success: true, date: tomorrowStr, total: reservations.length, emailsSent: sent + 1 });
+
   } catch (error) {
     console.error("Reminder error:", error.message);
     return res.status(500).json({ error: error.message });
