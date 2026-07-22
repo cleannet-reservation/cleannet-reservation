@@ -320,9 +320,16 @@ function BookingFlow({ config }) {
       .then(r => r.json())
       .then(data => {
         if (!Array.isArray(data)) return;
+        // Stocker les plages horaires occupées (début + fin)
         const taken = data
           .filter(r => r.date === form.date && r.statut !== "annule")
-          .map(r => r.creneau?.split(" → ")[0])
+          .map(r => {
+            const parts = r.creneau?.split(" → ");
+            if (!parts || parts.length < 2) return null;
+            const [sh, sm] = parts[0].split(":").map(Number);
+            const [eh, em] = parts[1].split(":").map(Number);
+            return { start: sh * 60 + sm, end: eh * 60 + em };
+          })
           .filter(Boolean);
         setBookedSlots(taken);
       })
@@ -658,7 +665,12 @@ _Envoyé depuis le site de réservation CleanNet_`
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 8 }}>
                         {slots.map(slot => {
                           const isSelected = form.timeSlot === slot.start;
-                          const isBooked = bookedSlots.includes(slot.start);
+                          // Vérifier si ce créneau chevauche une réservation existante
+                          const [sh, sm] = slot.start.split(":").map(Number);
+                          const [eh, em] = slot.end.split(":").map(Number);
+                          const slotStart = sh * 60 + sm;
+                          const slotEnd = eh * 60 + em;
+                          const isBooked = bookedSlots.some(b => slotStart < b.end && slotEnd > b.start);
                           return (
                             <button key={slot.start}
                               onClick={() => !isBooked && setForm(p => ({ ...p, timeSlot: slot.start, timeSlotEnd: slot.end }))}
