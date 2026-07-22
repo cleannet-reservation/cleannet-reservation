@@ -311,6 +311,23 @@ function BookingFlow({ config }) {
   const [requesting, setRequesting] = useState(false);
   const [requestDone, setRequestDone] = useState(false);
   const [surface, setSurface] = useState("");
+  const [bookedSlots, setBookedSlots] = useState([]);
+
+  // Charger les créneaux déjà réservés quand la date change
+  useEffect(() => {
+    if (!form.date) return;
+    fetch(`/api/reservations?t=${Date.now()}`, { cache: "no-store" })
+      .then(r => r.json())
+      .then(data => {
+        if (!Array.isArray(data)) return;
+        const taken = data
+          .filter(r => r.date === form.date && r.statut !== "annule")
+          .map(r => r.creneau?.split(" → ")[0])
+          .filter(Boolean);
+        setBookedSlots(taken);
+      })
+      .catch(() => {});
+  }, [form.date]);
 
   const optionPrice = option
     ? option.priceType === "m2"
@@ -641,20 +658,27 @@ _Envoyé depuis le site de réservation CleanNet_`
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 8 }}>
                         {slots.map(slot => {
                           const isSelected = form.timeSlot === slot.start;
+                          const isBooked = bookedSlots.includes(slot.start);
                           return (
                             <button key={slot.start}
-                              onClick={() => setForm(p => ({ ...p, timeSlot: slot.start, timeSlotEnd: slot.end }))}
+                              onClick={() => !isBooked && setForm(p => ({ ...p, timeSlot: slot.start, timeSlotEnd: slot.end }))}
+                              disabled={isBooked}
+                              title={isBooked ? "Créneau déjà réservé" : ""}
                               style={{
-                                border: `2px solid ${isSelected ? color : "#E5E7EB"}`,
-                                background: isSelected ? color : "#fff",
-                                color: isSelected ? "#fff" : "#1A1F36",
-                                borderRadius: 10, padding: "10px 8px", cursor: "pointer",
+                                border: `2px solid ${isBooked ? "#E5E7EB" : isSelected ? color : "#E5E7EB"}`,
+                                background: isBooked ? "#F3F4F6" : isSelected ? color : "#fff",
+                                color: isBooked ? "#D1D5DB" : isSelected ? "#fff" : "#1A1F36",
+                                borderRadius: 10, padding: "10px 8px",
+                                cursor: isBooked ? "not-allowed" : "pointer",
                                 fontWeight: isSelected ? 800 : 600, fontSize: 13,
                                 display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
                                 transition: "all 0.15s",
+                                position: "relative",
                               }}>
-                              <span style={{ fontSize: 15 }}>{slot.start}</span>
-                              <span style={{ fontSize: 11, opacity: 0.75 }}>→ {slot.end}</span>
+                              <span style={{ fontSize: 15, textDecoration: isBooked ? "line-through" : "none" }}>{slot.start}</span>
+                              <span style={{ fontSize: 11, opacity: isBooked ? 0.5 : 0.75 }}>
+                                {isBooked ? "Réservé" : `→ ${slot.end}`}
+                              </span>
                             </button>
                           );
                         })}

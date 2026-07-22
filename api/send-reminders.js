@@ -24,20 +24,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, message: "Aucune réservation demain", date: tomorrowStr });
     }
 
-    const sendSMS = async (telephone, text) => {
-      if (!brevoKey || !telephone) return false;
-      let tel = telephone.replace(/\s/g, "").replace(/\./g, "");
-      if (tel.startsWith("0")) tel = "+33" + tel.slice(1);
-      if (!tel.startsWith("+")) tel = "+33" + tel;
-      try {
-        const resp = await fetch("https://api.brevo.com/v3/transactionalSMS/sms", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "api-key": brevoKey },
-          body: JSON.stringify({ sender: "CleanNet", recipient: tel, content: text, type: "transactional" }),
-        });
-        return resp.ok;
-      } catch (e) { console.error("SMS error:", e.message); return false; }
-    };
+    const sendEmail = async (to, toName, subject, html) => {
       if (!brevoKey) return false;
       const resp = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
@@ -103,13 +90,6 @@ export default async function handler(req, res) {
           </div>
         </div>`;
       await sendEmail(rv.email, `${rv.prenom} ${rv.nom}`, `⏰ Rappel — Votre rendez-vous CleanNet est demain à ${rv.creneau || ""}`, clientHtml);
-
-      // SMS de rappel au client
-      if (rv.telephone) {
-        const smsText = `CleanNet\n⏰ Rappel rdv demain !\n🧹 ${rv.service}\n📅 ${rv.date} à ${rv.creneau?.split(" → ")[0] || ""}\n📍 ${rv.adresse || ""}\nQuestion ? 📞 ${process.env.COMPANY_PHONE || "06 12 92 20 48"}`;
-        await sendSMS(rv.telephone, smsText);
-      }
-
       sent++;
     }
 
