@@ -303,7 +303,6 @@ function BookingFlow({ config }) {
   const canNext = () => {
     if (step === 0) {
       if (Object.keys(selectedServices).length === 0) return false;
-      // Vérifier que les surfaces sont renseignées pour les options m²
       for (const [svcId, optId] of Object.entries(selectedServices)) {
         const svc = services.find(s => s.id === svcId);
         const opt = svc?.options.find(o => o.id === optId);
@@ -315,14 +314,6 @@ function BookingFlow({ config }) {
     return true;
   };
 
-  const servicesTotal = Object.entries(selectedServices).reduce((total, [svcId, optId]) => {
-    const svc = services.find(s => s.id === svcId);
-    const opt = svc?.options.find(o => o.id === optId);
-    if (!opt) return total;
-    const price = opt.priceType === "m2" ? Number(opt.price) * (parseFloat(surfaces[svcId]) || 0) : Number(opt.price);
-    return total + price;
-  }, 0);
-
   const [payMode, setPayMode] = useState(null);
   const [requesting, setRequesting] = useState(false);
   const [requestDone, setRequestDone] = useState(false);
@@ -330,6 +321,14 @@ function BookingFlow({ config }) {
   const [surfaces, setSurfaces] = useState({});
   const [bookedSlots, setBookedSlots] = useState([]);
   const [selectedServices, setSelectedServices] = useState({});
+
+  const servicesTotal = Object.entries(selectedServices).reduce((total, [svcId, optId]) => {
+    const svc = services.find(s => s.id === svcId);
+    const opt = svc?.options.find(o => o.id === optId);
+    if (!opt) return total;
+    const price = opt.priceType === "m2" ? Number(opt.price) * (parseFloat(surfaces[svcId]) || 0) : Number(opt.price);
+    return total + price;
+  }, 0);
 
   // Charger les créneaux déjà réservés quand la date change
   useEffect(() => {
