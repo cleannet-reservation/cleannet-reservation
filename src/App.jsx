@@ -294,7 +294,7 @@ function BookingFlow({ config }) {
   const [step, setStep] = useState(0);
   const [service, setService] = useState(null);
   const [option, setOption] = useState(null);
-  const [activeUpsells, setActiveUpsells] = useState([]);
+  const [activeUpsells, setActiveUpsells] = useState({});
   const [form, setForm] = useState({});
   const [confirmed, setConfirmed] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -341,7 +341,7 @@ function BookingFlow({ config }) {
       ? Number(option.price) * (parseFloat(surface) || 0)
       : Number(option.price)
     : 0;
-  const upsellTotal = upsells.filter(u => activeUpsells.includes(u.id)).reduce((s, u) => s + Number(u.price), 0);
+  const upsellTotal = upsells.filter(u => (activeUpsells[u.id] || 0) > 0).reduce((s, u) => s + Number(u.price) * (activeUpsells[u.id] || 0), 0);
   const subtotal = optionPrice + upsellTotal;
   const acompte = subtotal * (Number(company.acomptePercent) / 100);
 
@@ -584,26 +584,39 @@ _Envoyé depuis le site de réservation CleanNet_`
                 <p style={{ color: "#6B7280", fontSize: 14, margin: "0 0 14px" }}>Profitez-en pour combiner vos prestations</p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {upsells.filter(u => !u.services || u.services.length === 0 || u.services.includes(service?.id)).map(u => {
-                    const active = activeUpsells.includes(u.id);
+                    const qty = activeUpsells[u.id] || 0;
+                    const active = qty > 0;
+                    const hasQty = !!u.priceUnit;
                     return (
-                      <button key={u.id} onClick={() => setActiveUpsells(prev => active ? prev.filter(x => x !== u.id) : [...prev, u.id])}
-                        style={{
-                          border: `2px solid ${active ? "#059669" : "#E5E7EB"}`,
-                          background: active ? "#F0FDF4" : "#fff",
-                          borderRadius: 10, padding: "12px 16px", cursor: "pointer",
-                          display: "flex", alignItems: "center", gap: 12,
-                        }}>
+                      <div key={u.id} style={{
+                        border: `2px solid ${active ? "#059669" : "#E5E7EB"}`,
+                        background: active ? "#F0FDF4" : "#fff",
+                        borderRadius: 10, padding: "12px 16px",
+                        display: "flex", alignItems: "center", gap: 12,
+                      }}>
                         <span style={{ fontSize: 22 }}>{u.icon}</span>
-                        <div style={{ flex: 1, textAlign: "left" }}>
+                        <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</div>
-                          <div style={{ fontSize: 13, color: "#059669", fontWeight: 700 }}>+{fmt(u.price)}</div>
+                          <div style={{ fontSize: 13, color: "#059669", fontWeight: 700 }}>
+                            {hasQty ? `${fmt(u.price)} / ${u.priceUnit}` : `+${fmt(u.price)}`}
+                            {active && hasQty && <span style={{ color, marginLeft: 8 }}>= +{fmt(Number(u.price) * qty)}</span>}
+                          </div>
                         </div>
-                        <span style={{
-                          fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20,
-                          background: active ? "#DCFCE7" : color + "11",
-                          color: active ? "#059669" : color,
-                        }}>{active ? "✓ Ajouté" : "+ Ajouter"}</span>
-                      </button>
+                        {hasQty ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: Math.max(0, (p[u.id] || 0) - 1) }))}
+                              style={{ width: 32, height: 32, borderRadius: "50%", border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 18, cursor: "pointer", fontWeight: 700, color: "#374151" }}>−</button>
+                            <span style={{ fontSize: 16, fontWeight: 800, minWidth: 24, textAlign: "center", color: active ? "#059669" : "#9CA3AF" }}>{qty}</span>
+                            <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: (p[u.id] || 0) + 1 }))}
+                              style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: color, fontSize: 18, cursor: "pointer", fontWeight: 700, color: "#fff" }}>+</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: p[u.id] ? 0 : 1 }))}
+                            style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, border: "none", background: active ? "#DCFCE7" : color + "11", color: active ? "#059669" : color, cursor: "pointer" }}>
+                            {active ? "✓ Ajouté" : "+ Ajouter"}
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -715,9 +728,9 @@ _Envoyé depuis le site de réservation CleanNet_`
             <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 16px" }}>Récapitulatif</h2>
             <div style={recapCard}>
               <Row label={`${service.icon} ${service.name}`} val={option?.label} />
-              <Row label="Prix de base" val={fmt(option?.price || 0)} />
-              {upsells.filter(u => activeUpsells.includes(u.id)).map(u => (
-                <Row key={u.id} label={`${u.icon} ${u.name}`} val={`+${fmt(u.price)}`} />
+              <Row label="Prix de base" val={fmt(optionPrice)} />
+              {upsells.filter(u => (activeUpsells[u.id] || 0) > 0).map(u => (
+                <Row key={u.id} label={`${u.icon} ${u.name}${u.priceUnit ? ` × ${activeUpsells[u.id]}` : ""}`} val={`+${fmt(Number(u.price) * (activeUpsells[u.id] || 1))}`} />
               ))}
               <div style={{ height: 1, background: "#E5E7EB", margin: "8px 0" }} />
               <Row label="Total estimé" val={fmt(subtotal)} bold />
@@ -2080,6 +2093,27 @@ function AdminPanel({ config, onSave, onClose }) {
                     </div>
                     <button onClick={() => removeUpsell(ui)}
                       style={{ background: "#FEE2E2", border: "none", borderRadius: 6, padding: "7px 10px", color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>✕</button>
+                  </div>
+                  {/* Mode quantité */}
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                      <button onClick={() => updateUpsell(ui, "priceUnit", "")}
+                        style={{ padding: "4px 10px", fontSize: 12, fontWeight: 600, border: `1.5px solid ${!u.priceUnit ? color : "#E5E7EB"}`, borderRadius: 20, background: !u.priceUnit ? color + "15" : "#fff", color: !u.priceUnit ? color : "#6B7280", cursor: "pointer" }}>
+                        ✅ Prix unique
+                      </button>
+                      <button onClick={() => updateUpsell(ui, "priceUnit", u.priceUnit || "unité")}
+                        style={{ padding: "4px 10px", fontSize: 12, fontWeight: 600, border: `1.5px solid ${u.priceUnit ? color : "#E5E7EB"}`, borderRadius: 20, background: u.priceUnit ? color + "15" : "#fff", color: u.priceUnit ? color : "#6B7280", cursor: "pointer" }}>
+                        🔢 Prix par quantité
+                      </button>
+                    </div>
+                    {u.priceUnit && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 13, color: "#6B7280" }}>Unité :</span>
+                        <input value={u.priceUnit} onChange={e => updateUpsell(ui, "priceUnit", e.target.value)}
+                          style={{ ...inputStyle, width: 120 }} placeholder="ex: coussin, fenêtre..." />
+                        <span style={{ fontSize: 12, color: "#6B7280" }}>→ Le client choisit la quantité</span>
+                      </div>
+                    )}
                   </div>
                   {/* Sélection des services */}
                   <div>
