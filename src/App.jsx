@@ -170,7 +170,7 @@ function saveConfig(cfg) {
 }
 
 // ─── BOOKING STEPS ────────────────────────────────────────────────────────────
-const STEPS = ["Service", "Options", "Coordonnées", "Récapitulatif"];
+const STEPS = ["Prestations", "Coordonnées", "Récapitulatif"];
 
 function ProgressBar({ step, color }) {
   return (
@@ -301,17 +301,35 @@ function BookingFlow({ config }) {
   const [payError, setPayError] = useState(null);
 
   const canNext = () => {
-    if (step === 0) return !!service;
-    if (step === 1) return !!option && (option.priceType !== "m2" || (parseFloat(surface) > 0));
-    if (step === 2) return !!(form.prenom && form.nom && form.email && form.telephone && form.adresse && form.date && form.timeSlot);
+    if (step === 0) {
+      if (Object.keys(selectedServices).length === 0) return false;
+      // Vérifier que les surfaces sont renseignées pour les options m²
+      for (const [svcId, optId] of Object.entries(selectedServices)) {
+        const svc = services.find(s => s.id === svcId);
+        const opt = svc?.options.find(o => o.id === optId);
+        if (opt?.priceType === "m2" && !(parseFloat(surfaces[svcId]) > 0)) return false;
+      }
+      return true;
+    }
+    if (step === 1) return !!(form.prenom && form.nom && form.email && form.telephone && form.adresse && form.date && form.timeSlot);
     return true;
   };
+
+  const servicesTotal = Object.entries(selectedServices).reduce((total, [svcId, optId]) => {
+    const svc = services.find(s => s.id === svcId);
+    const opt = svc?.options.find(o => o.id === optId);
+    if (!opt) return total;
+    const price = opt.priceType === "m2" ? Number(opt.price) * (parseFloat(surfaces[svcId]) || 0) : Number(opt.price);
+    return total + price;
+  }, 0);
 
   const [payMode, setPayMode] = useState(null);
   const [requesting, setRequesting] = useState(false);
   const [requestDone, setRequestDone] = useState(false);
   const [surface, setSurface] = useState("");
+  const [surfaces, setSurfaces] = useState({});
   const [bookedSlots, setBookedSlots] = useState([]);
+  const [selectedServices, setSelectedServices] = useState({});
 
   // Charger les créneaux déjà réservés quand la date change
   useEffect(() => {
@@ -336,16 +354,20 @@ function BookingFlow({ config }) {
       .catch(() => {});
   }, [form.date]);
 
-  const optionPrice = option
-    ? option.priceType === "m2"
-      ? Number(option.price) * (parseFloat(surface) || 0)
-      : Number(option.price)
-    : 0;
+  const optionPrice = 0; // Non utilisé - remplacé par servicesTotal
   const upsellTotal = upsells.filter(u => (activeUpsells[u.id] || 0) > 0).reduce((s, u) => s + Number(u.price) * (activeUpsells[u.id] || 0), 0);
-  const subtotal = optionPrice + upsellTotal;
+  const subtotal = servicesTotal + upsellTotal;
   const acompte = subtotal * (Number(company.acomptePercent) / 100);
 
+  // Résumé des services sélectionnés
+  const getServicesLabel = () => Object.entries(selectedServices).map(([svcId, optId]) => {
+    const svc = services.find(s => s.id === svcId);
+    const opt = svc?.options.find(o => o.id === optId);
+    return `${svc?.name} — ${opt?.label}`;
+  }).join(" + ");
+
   const handleRequestOnly = () => {
+    const servicesLabel = getServicesLabel();
     // Sauvegarder dans le pipeline via API
     fetch("/api/pipeline", {
       method: "POST",
@@ -353,7 +375,7 @@ function BookingFlow({ config }) {
       body: JSON.stringify({
         id: uid(),
         client: `${form.prenom} ${form.nom}`,
-        service: `${service.name} — ${option.label}`,
+        service: servicesLabel,
         montant: subtotal,
         stage: "contact",
         date_creation: new Date().toISOString().slice(0, 10),
@@ -372,7 +394,7 @@ function BookingFlow({ config }) {
       body: JSON.stringify({
         prenom: form.prenom, nom: form.nom, email: form.email,
         telephone: form.telephone, adresse: form.adresse,
-        service: service.name, option: option.label,
+        service: servicesLabel, option: "",
         date: form.date, creneau: `${form.timeSlot} → ${form.timeSlotEnd}`,
         total: String(subtotal.toFixed(2)), acompte: "0",
         statut: "attente", source: "site",
@@ -385,7 +407,7 @@ function BookingFlow({ config }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         prenom: form.prenom, nom: form.nom,
-        service: service.name, option: option.label,
+        service: servicesLabel, option: "",
         date: form.date, creneau: `${form.timeSlot} → ${form.timeSlotEnd}`,
         adresse: form.adresse, telephone: form.telephone,
         email: form.email,
@@ -484,12 +506,21 @@ _Envoyé depuis le site de réservation CleanNet_`
         <p>📞 {form.telephone}</p>
       </div>
       <br />
-      <button onClick={() => { setConfirmed(false); setStep(0); setService(null); setOption(null); setActiveUpsells([]); setForm({}); }}
+      <button onClick={() => { setConfirmed(false); setStep(0); setService(null); setOption(null); setActiveUpsells({}); setForm({}); setSelectedServices({}); }}
         style={{ marginTop: 24, background: color, color: "#fff", border: "none", borderRadius: 8, padding: "11px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
         Nouvelle réservation
       </button>
     </div>
   );
+
+  // Calcul total toutes prestations
+  const totalDuration = Object.entries(selectedServices).reduce((total, [svcId, optId]) => {
+    const svc = services.find(s => s.id === svcId);
+    const opt = svc?.options.find(o => o.id === optId);
+    return total + (Number(opt?.duration) || 60);
+  }, 0);
+
+  const fmtDurationTotal = (m) => { const h = Math.floor(m/60), mn = m%60; return h===0?`${mn}min`:mn===0?`${h}h`:`${h}h${String(mn).padStart(2,"0")}`; };
 
   return (
     <div>
@@ -497,103 +528,82 @@ _Envoyé depuis le site de réservation CleanNet_`
 
       <div style={{ padding: "24px 24px 8px" }}>
 
-        {/* STEP 0 — Service */}
+        {/* STEP 0 — Sélection multiple de services */}
         {step === 0 && (
           <>
-            <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 4px" }}>Quelle prestation souhaitez-vous ?</h2>
-            <p style={{ color: "#6B7280", fontSize: 14, margin: "0 0 18px" }}>Sélectionnez un service pour commencer</p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))", gap: 12 }}>
-              {services.map(s => (
-                <button key={s.id} onClick={() => { setService(s); setOption(null); }}
-                  style={{
-                    border: `2px solid ${service?.id === s.id ? color : "#E5E7EB"}`,
-                    background: service?.id === s.id ? color + "11" : "#fff",
-                    borderRadius: 12, padding: "16px 12px", cursor: "pointer",
-                    display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4, textAlign: "left",
-                  }}>
-                  <span style={{ fontSize: 26 }}>{s.icon}</span>
-                  <span style={{ fontWeight: 700, fontSize: 14 }}>{s.name}</span>
-                  <span style={{ fontSize: 12, color: "#6B7280", lineHeight: 1.4 }}>{s.description}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color, marginTop: 4 }}>
-                    À partir de {fmt(Math.min(...s.options.map(o => o.price)))}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* STEP 1 — Options + Upsells */}
-        {step === 1 && service && (
-          <>
-            <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 4px" }}>{service.icon} {service.name}</h2>
-            <p style={{ color: "#6B7280", fontSize: 14, margin: "0 0 16px" }}>Choisissez votre formule</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
-              {service.options.map(opt => (
-                <button key={opt.id} onClick={() => { setOption(opt); setSurface(""); }}
-                  style={{
-                    border: `2px solid ${option?.id === opt.id ? color : "#E5E7EB"}`,
-                    background: option?.id === opt.id ? color + "11" : "#fff",
-                    borderRadius: 10, padding: "14px 16px", cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                  }}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>{opt.label}</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontWeight: 800, fontSize: 15, color }}>
-                      {opt.priceType === "m2" ? `${fmt(opt.price)}/m²` : fmt(opt.price)}
-                    </span>
-                    {option?.id === opt.id && (
-                      <span style={{ background: color, color: "#fff", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>✓</span>
+            <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 4px" }}>Quelles prestations souhaitez-vous ?</h2>
+            <p style={{ color: "#6B7280", fontSize: 14, margin: "0 0 18px" }}>Sélectionnez un ou plusieurs services</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {services.map(s => {
+                const selectedOptId = selectedServices[s.id];
+                const isSelected = !!selectedOptId;
+                const selectedOpt = s.options.find(o => o.id === selectedOptId);
+                return (
+                  <div key={s.id} style={{ border: `2px solid ${isSelected ? color : "#E5E7EB"}`, background: isSelected ? color + "08" : "#fff", borderRadius: 12, padding: "14px 16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: isSelected ? 12 : 0 }}>
+                      <span style={{ fontSize: 24 }}>{s.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
+                        <div style={{ fontSize: 12, color: "#6B7280" }}>{s.description}</div>
+                      </div>
+                      <button onClick={() => {
+                        if (isSelected) {
+                          setSelectedServices(prev => { const n = {...prev}; delete n[s.id]; return n; });
+                        } else {
+                          // Sélectionner la première option par défaut
+                          setSelectedServices(prev => ({ ...prev, [s.id]: s.options[0].id }));
+                        }
+                      }} style={{ background: isSelected ? "#FEE2E2" : color, color: isSelected ? "#DC2626" : "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                        {isSelected ? "✕ Retirer" : "+ Ajouter"}
+                      </button>
+                    </div>
+                    {/* Sélection de l'option si service sélectionné */}
+                    {isSelected && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {s.options.map(opt => (
+                          <button key={opt.id} onClick={() => setSelectedServices(prev => ({ ...prev, [s.id]: opt.id }))}
+                            style={{ border: `1.5px solid ${selectedOptId === opt.id ? color : "#E5E7EB"}`, background: selectedOptId === opt.id ? color + "11" : "#F7F8FC", borderRadius: 8, padding: "10px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontWeight: 600, fontSize: 14 }}>{opt.label}</span>
+                            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                              <span style={{ fontWeight: 800, color }}>{opt.priceType === "m2" ? `${fmt(opt.price)}/m²` : fmt(opt.price)}</span>
+                              <span style={{ fontSize: 12, color: "#9CA3AF" }}>({fmtDurationTotal(Number(opt.duration)||60)})</span>
+                              {selectedOptId === opt.id && <span style={{ background: color, color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>✓</span>}
+                            </div>
+                          </button>
+                        ))}
+                        {/* Champ surface si m² */}
+                        {selectedOpt?.priceType === "m2" && (
+                          <div style={{ background: "#EEF3FF", border: `1.5px solid ${color}`, borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
+                            <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 6 }}>📐 Surface pour {s.name} ?</label>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <input type="number" min="1" placeholder="ex: 30" value={surfaces[s.id] || ""}
+                                onChange={e => setSurfaces(prev => ({ ...prev, [s.id]: e.target.value }))}
+                                style={{ border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "8px 12px", fontSize: 15, width: 90, outline: "none" }} />
+                              <span style={{ color: "#6B7280" }}>m²</span>
+                              {surfaces[s.id] && parseFloat(surfaces[s.id]) > 0 && (
+                                <span style={{ fontWeight: 800, color }}>= {fmt(Number(selectedOpt.price) * parseFloat(surfaces[s.id]))}</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
-                </button>
-              ))}
+                );
+              })}
             </div>
 
-            {/* Champ surface si prix au m² */}
-            {option?.priceType === "m2" && (
-              <div style={{ background: "#EEF3FF", border: `1.5px solid ${color}`, borderRadius: 12, padding: "16px 18px", marginTop: 12 }}>
-                <label style={{ fontSize: 14, fontWeight: 700, display: "block", marginBottom: 8, color: "#1A1F36" }}>
-                  📐 Quelle est la surface à nettoyer ?
-                </label>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <input
-                    type="number" min="1" placeholder="ex: 30"
-                    value={surface}
-                    onChange={e => setSurface(e.target.value)}
-                    style={{ border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "10px 14px", fontSize: 16, fontWeight: 600, width: 100, outline: "none", fontFamily: "inherit" }}
-                  />
-                  <span style={{ fontSize: 15, fontWeight: 600, color: "#6B7280" }}>m²</span>
-                  {surface && parseFloat(surface) > 0 && (
-                    <span style={{ marginLeft: "auto", fontSize: 16, fontWeight: 800, color }}>
-                      = {fmt(Number(option.price) * parseFloat(surface))}
-                    </span>
-                  )}
-                </div>
-                {surface && parseFloat(surface) > 0 && (
-                  <p style={{ fontSize: 12, color: "#6B7280", margin: "8px 0 0" }}>
-                    {parseFloat(surface)} m² × {fmt(option.price)}/m² = <strong style={{ color }}>{fmt(Number(option.price) * parseFloat(surface))}</strong>
-                  </p>
-                )}
-              </div>
-            )}
-
-            {upsells.filter(u => !u.services || u.services.length === 0 || u.services.includes(service?.id)).length > 0 && (
-              <>
-                <h3 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 4px" }}>✨ Ajoutez un service complémentaire</h3>
-                <p style={{ color: "#6B7280", fontSize: 14, margin: "0 0 14px" }}>Profitez-en pour combiner vos prestations</p>
+            {/* Upsells */}
+            {upsells.length > 0 && Object.keys(selectedServices).length > 0 && (
+              <div style={{ marginTop: 20 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 10px" }}>✨ Services complémentaires</h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {upsells.filter(u => !u.services || u.services.length === 0 || u.services.includes(service?.id)).map(u => {
+                  {upsells.filter(u => !u.services || u.services.length === 0 || u.services.some(sid => selectedServices[sid])).map(u => {
                     const qty = activeUpsells[u.id] || 0;
                     const active = qty > 0;
                     const hasQty = !!u.priceUnit;
                     return (
-                      <div key={u.id} style={{
-                        border: `2px solid ${active ? "#059669" : "#E5E7EB"}`,
-                        background: active ? "#F0FDF4" : "#fff",
-                        borderRadius: 10, padding: "12px 16px",
-                        display: "flex", alignItems: "center", gap: 12,
-                      }}>
+                      <div key={u.id} style={{ border: `2px solid ${active ? "#059669" : "#E5E7EB"}`, background: active ? "#F0FDF4" : "#fff", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
                         <span style={{ fontSize: 22 }}>{u.icon}</span>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</div>
@@ -604,15 +614,12 @@ _Envoyé depuis le site de réservation CleanNet_`
                         </div>
                         {hasQty ? (
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: Math.max(0, (p[u.id] || 0) - 1) }))}
-                              style={{ width: 32, height: 32, borderRadius: "50%", border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 18, cursor: "pointer", fontWeight: 700, color: "#374151" }}>−</button>
-                            <span style={{ fontSize: 16, fontWeight: 800, minWidth: 24, textAlign: "center", color: active ? "#059669" : "#9CA3AF" }}>{qty}</span>
-                            <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: (p[u.id] || 0) + 1 }))}
-                              style={{ width: 32, height: 32, borderRadius: "50%", border: "none", background: color, fontSize: 18, cursor: "pointer", fontWeight: 700, color: "#fff" }}>+</button>
+                            <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: Math.max(0, (p[u.id] || 0) - 1) }))} style={{ width: 30, height: 30, borderRadius: "50%", border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 16, cursor: "pointer", fontWeight: 700 }}>−</button>
+                            <span style={{ fontSize: 15, fontWeight: 800, minWidth: 20, textAlign: "center", color: active ? "#059669" : "#9CA3AF" }}>{qty}</span>
+                            <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: (p[u.id] || 0) + 1 }))} style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: color, fontSize: 16, cursor: "pointer", fontWeight: 700, color: "#fff" }}>+</button>
                           </div>
                         ) : (
-                          <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: p[u.id] ? 0 : 1 }))}
-                            style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, border: "none", background: active ? "#DCFCE7" : color + "11", color: active ? "#059669" : color, cursor: "pointer" }}>
+                          <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: p[u.id] ? 0 : 1 }))} style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, border: "none", background: active ? "#DCFCE7" : color + "11", color: active ? "#059669" : color, cursor: "pointer" }}>
                             {active ? "✓ Ajouté" : "+ Ajouter"}
                           </button>
                         )}
@@ -620,13 +627,35 @@ _Envoyé depuis le site de réservation CleanNet_`
                     );
                   })}
                 </div>
-              </>
+              </div>
+            )}
+
+            {/* Récap sélection */}
+            {Object.keys(selectedServices).length > 0 && (
+              <div style={{ marginTop: 16, background: "#EEF3FF", border: `1.5px solid ${color}`, borderRadius: 12, padding: "14px 18px" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color, marginBottom: 8 }}>📋 Récapitulatif de votre sélection</div>
+                {Object.entries(selectedServices).map(([svcId, optId]) => {
+                  const svc = services.find(s => s.id === svcId);
+                  const opt = svc?.options.find(o => o.id === optId);
+                  const svcPrice = opt?.priceType === "m2" ? Number(opt.price) * (parseFloat(surfaces[svcId]) || 0) : Number(opt?.price || 0);
+                  return (
+                    <div key={svcId} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" }}>
+                      <span>{svc?.icon} {svc?.name} — {opt?.label}</span>
+                      <span style={{ fontWeight: 700, color }}>{fmt(svcPrice)}</span>
+                    </div>
+                  );
+                })}
+                <div style={{ borderTop: "1px solid #D1D5DB", marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+                  <span style={{ fontWeight: 700 }}>⏱️ Durée totale</span>
+                  <span style={{ fontWeight: 700, color }}>{fmtDurationTotal(totalDuration)}</span>
+                </div>
+              </div>
             )}
           </>
         )}
 
-        {/* STEP 2 — Form */}
-        {step === 2 && (
+        {/* STEP 1 — Coordonnées */}
+        {step === 1 && (
           <>
             <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 4px" }}>Vos coordonnées</h2>
             <p style={{ color: "#6B7280", fontSize: 14, margin: "0 0 18px" }}>Nous confirmerons le rendez-vous par email</p>
@@ -657,10 +686,10 @@ _Envoyé depuis le site de réservation CleanNet_`
               </div>
 
               {/* Time slot picker */}
-              {form.date && option && (() => {
+              {form.date && (() => {
                 const dateObj = new Date(form.date);
                 const daySched = availability?.daySchedules?.[dateObj.getDay()];
-                const duration = Number(option.duration) || 60;
+                const duration = totalDuration || 60;
                 const slots = daySched ? generateSlots(daySched.start, daySched.end, duration) : [];
                 return (
                   <div style={{ gridColumn: "1 / -1" }}>
@@ -722,17 +751,24 @@ _Envoyé depuis le site de réservation CleanNet_`
           </>
         )}
 
-        {/* STEP 3 — Recap */}
-        {step === 3 && (
+        {/* STEP 2 — Récapitulatif */}
+        {step === 2 && (
           <>
             <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 16px" }}>Récapitulatif</h2>
             <div style={recapCard}>
-              <Row label={`${service.icon} ${service.name}`} val={option?.label} />
-              <Row label="Prix de base" val={fmt(optionPrice)} />
+              {Object.entries(selectedServices).map(([svcId, optId]) => {
+                const svc = services.find(s => s.id === svcId);
+                const opt = svc?.options.find(o => o.id === optId);
+                const price = opt?.priceType === "m2" ? Number(opt.price) * (parseFloat(surfaces[svcId]) || 0) : Number(opt?.price || 0);
+                return (
+                  <Row key={svcId} label={`${svc?.icon} ${svc?.name} — ${opt?.label}${opt?.priceType === "m2" ? ` (${surfaces[svcId]}m²)` : ""}`} val={fmt(price)} />
+                );
+              })}
               {upsells.filter(u => (activeUpsells[u.id] || 0) > 0).map(u => (
                 <Row key={u.id} label={`${u.icon} ${u.name}${u.priceUnit ? ` × ${activeUpsells[u.id]}` : ""}`} val={`+${fmt(Number(u.price) * (activeUpsells[u.id] || 1))}`} />
               ))}
               <div style={{ height: 1, background: "#E5E7EB", margin: "8px 0" }} />
+              <Row label="⏱️ Durée totale" val={`${Math.floor(totalDuration/60)}h${totalDuration%60>0?String(totalDuration%60).padStart(2,"0")+"min":""}`} />
               <Row label="Total estimé" val={fmt(subtotal)} bold />
             </div>
             <div style={recapCard}>
@@ -872,10 +908,10 @@ _Envoyé depuis le site de réservation CleanNet_`
           ? <button onClick={() => setStep(s => s - 1)} style={backBtn}>← Retour</button>
           : <div />
         }
-        {step < 3 && (
+        {step < 2 && (
           <button onClick={() => canNext() && setStep(s => s + 1)} disabled={!canNext()}
             style={{ ...nextBtn, background: canNext() ? color : "#E5E7EB", color: canNext() ? "#fff" : "#9CA3AF", cursor: canNext() ? "pointer" : "not-allowed" }}>
-            {step === 2 ? "Voir le récapitulatif →" : "Continuer →"}
+            {step === 1 ? "Voir le récapitulatif →" : "Continuer →"}
           </button>
         )}
       </div>
