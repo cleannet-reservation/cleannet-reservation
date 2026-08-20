@@ -593,43 +593,6 @@ _Envoyé depuis le site de réservation CleanNet_`
               })}
             </div>
 
-            {/* Upsells */}
-            {upsells.length > 0 && Object.keys(selectedServices).length > 0 && (
-              <div style={{ marginTop: 20 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 10px" }}>✨ Services complémentaires</h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {upsells.filter(u => !u.services || u.services.length === 0 || u.services.some(sid => selectedServices[sid])).map(u => {
-                    const qty = activeUpsells[u.id] || 0;
-                    const active = qty > 0;
-                    const hasQty = !!u.priceUnit;
-                    return (
-                      <div key={u.id} style={{ border: `2px solid ${active ? "#059669" : "#E5E7EB"}`, background: active ? "#F0FDF4" : "#fff", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-                        <span style={{ fontSize: 22 }}>{u.icon}</span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</div>
-                          <div style={{ fontSize: 13, color: "#059669", fontWeight: 700 }}>
-                            {hasQty ? `${fmt(u.price)} / ${u.priceUnit}` : `+${fmt(u.price)}`}
-                            {active && hasQty && <span style={{ color, marginLeft: 8 }}>= +{fmt(Number(u.price) * qty)}</span>}
-                          </div>
-                        </div>
-                        {hasQty ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: Math.max(0, (p[u.id] || 0) - 1) }))} style={{ width: 30, height: 30, borderRadius: "50%", border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 16, cursor: "pointer", fontWeight: 700 }}>−</button>
-                            <span style={{ fontSize: 15, fontWeight: 800, minWidth: 20, textAlign: "center", color: active ? "#059669" : "#9CA3AF" }}>{qty}</span>
-                            <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: (p[u.id] || 0) + 1 }))} style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: color, fontSize: 16, cursor: "pointer", fontWeight: 700, color: "#fff" }}>+</button>
-                          </div>
-                        ) : (
-                          <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: p[u.id] ? 0 : 1 }))} style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, border: "none", background: active ? "#DCFCE7" : color + "11", color: active ? "#059669" : color, cursor: "pointer" }}>
-                            {active ? "✓ Ajouté" : "+ Ajouter"}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             {/* Récap sélection */}
             {Object.keys(selectedServices).length > 0 && (
               <div style={{ marginTop: 16, background: "#EEF3FF", border: `1.5px solid ${color}`, borderRadius: 12, padding: "14px 18px" }}>
