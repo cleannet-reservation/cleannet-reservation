@@ -170,7 +170,7 @@ function saveConfig(cfg) {
 }
 
 // ─── BOOKING STEPS ────────────────────────────────────────────────────────────
-const STEPS = ["Prestations", "Coordonnées", "Récapitulatif"];
+const STEPS = ["Prestations", "Options", "Coordonnées", "Récapitulatif"];
 
 function ProgressBar({ step, color }) {
   return (
@@ -310,7 +310,8 @@ function BookingFlow({ config }) {
       }
       return true;
     }
-    if (step === 1) return !!(form.prenom && form.nom && form.email && form.telephone && form.adresse && form.date && form.timeSlot);
+    if (step === 1) return true; // Upsells — toujours possible de continuer
+    if (step === 2) return !!(form.prenom && form.nom && form.email && form.telephone && form.adresse && form.date && form.timeSlot);
     return true;
   };
 
@@ -653,8 +654,53 @@ _Envoyé depuis le site de réservation CleanNet_`
           </>
         )}
 
-        {/* STEP 1 — Coordonnées */}
+        {/* STEP 1 — Upsells */}
         {step === 1 && (
+          <>
+            <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 4px" }}>✨ Services complémentaires</h2>
+            <p style={{ color: "#6B7280", fontSize: 14, margin: "0 0 18px" }}>Ajoutez des options pour en profiter davantage</p>
+            {upsells.filter(u => !u.services || u.services.length === 0 || u.services.some(sid => selectedServices[sid])).length === 0 ? (
+              <div style={{ textAlign: "center", padding: "32px", color: "#9CA3AF", background: "#F7F8FC", borderRadius: 12 }}>
+                <p>Aucun service complémentaire disponible.</p>
+                <p style={{ fontSize: 12 }}>Vous pouvez continuer directement.</p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {upsells.filter(u => !u.services || u.services.length === 0 || u.services.some(sid => selectedServices[sid])).map(u => {
+                  const qty = activeUpsells[u.id] || 0;
+                  const active = qty > 0;
+                  const hasQty = !!u.priceUnit;
+                  return (
+                    <div key={u.id} style={{ border: `2px solid ${active ? "#059669" : "#E5E7EB"}`, background: active ? "#F0FDF4" : "#fff", borderRadius: 10, padding: "12px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontSize: 22 }}>{u.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14 }}>{u.name}</div>
+                        <div style={{ fontSize: 13, color: "#059669", fontWeight: 700 }}>
+                          {hasQty ? `${fmt(u.price)} / ${u.priceUnit}` : `+${fmt(u.price)}`}
+                          {active && hasQty && <span style={{ color, marginLeft: 8 }}>= +{fmt(Number(u.price) * qty)}</span>}
+                        </div>
+                      </div>
+                      {hasQty ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: Math.max(0, (p[u.id] || 0) - 1) }))} style={{ width: 30, height: 30, borderRadius: "50%", border: "1.5px solid #E5E7EB", background: "#fff", fontSize: 16, cursor: "pointer", fontWeight: 700 }}>−</button>
+                          <span style={{ fontSize: 15, fontWeight: 800, minWidth: 20, textAlign: "center", color: active ? "#059669" : "#9CA3AF" }}>{qty}</span>
+                          <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: (p[u.id] || 0) + 1 }))} style={{ width: 30, height: 30, borderRadius: "50%", border: "none", background: color, fontSize: 16, cursor: "pointer", fontWeight: 700, color: "#fff" }}>+</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setActiveUpsells(p => ({ ...p, [u.id]: p[u.id] ? 0 : 1 }))} style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, border: "none", background: active ? "#DCFCE7" : color + "11", color: active ? "#059669" : color, cursor: "pointer" }}>
+                          {active ? "✓ Ajouté" : "+ Ajouter"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* STEP 2 — Coordonnées */}
+        {step === 2 && (
           <>
             <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 4px" }}>Vos coordonnées</h2>
             <p style={{ color: "#6B7280", fontSize: 14, margin: "0 0 18px" }}>Nous confirmerons le rendez-vous par email</p>
@@ -750,8 +796,8 @@ _Envoyé depuis le site de réservation CleanNet_`
           </>
         )}
 
-        {/* STEP 2 — Récapitulatif */}
-        {step === 2 && (
+        {/* STEP 3 — Récapitulatif */}
+        {step === 3 && (
           <>
             <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 16px" }}>Récapitulatif</h2>
             <div style={recapCard}>
@@ -907,10 +953,10 @@ _Envoyé depuis le site de réservation CleanNet_`
           ? <button onClick={() => setStep(s => s - 1)} style={backBtn}>← Retour</button>
           : <div />
         }
-        {step < 2 && (
+        {step < 3 && (
           <button onClick={() => canNext() && setStep(s => s + 1)} disabled={!canNext()}
             style={{ ...nextBtn, background: canNext() ? color : "#E5E7EB", color: canNext() ? "#fff" : "#9CA3AF", cursor: canNext() ? "pointer" : "not-allowed" }}>
-            {step === 1 ? "Voir le récapitulatif →" : "Continuer →"}
+            {step === 2 ? "Voir le récapitulatif →" : "Continuer →"}
           </button>
         )}
       </div>
