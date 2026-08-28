@@ -524,6 +524,8 @@ _Envoyé depuis le site de réservation CleanNet_`
       return total + (parseFloat(surfaces[svcId]) || 1) * 60;
     }
     return total + (Number(opt?.duration) || 60);
+  }, 0) + upsells.filter(u => (activeUpsells[u.id] || 0) > 0).reduce((total, u) => {
+    return total + (Number(u.duration) || 0) * (activeUpsells[u.id] || 1);
   }, 0);
 
   const fmtDurationTotal = (m) => { const h = Math.floor(m/60), mn = m%60; return h===0?`${mn}min`:mn===0?`${h}h`:`${h}h${String(mn).padStart(2,"0")}`; };
@@ -2165,8 +2167,13 @@ function AdminPanel({ config, onSave, onClose }) {
                       style={{ ...inputStyle, flex: 1 }} placeholder="Nom de l'upsell" />
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <input type="number" value={u.price} onChange={e => updateUpsell(ui, "price", e.target.value)}
-                        style={{ ...inputStyle, width: 80 }} />
+                        style={{ ...inputStyle, width: 70 }} />
                       <span style={{ fontSize: 13, color: "#6B7280" }}>€</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <input type="number" value={u.duration || 0} onChange={e => updateUpsell(ui, "duration", e.target.value)}
+                        style={{ ...inputStyle, width: 55 }} title="Durée en minutes" placeholder="0" />
+                      <span style={{ fontSize: 12, color: "#6B7280" }}>min</span>
                     </div>
                     <button onClick={() => removeUpsell(ui)}
                       style={{ background: "#FEE2E2", border: "none", borderRadius: 6, padding: "7px 10px", color: "#DC2626", fontWeight: 700, cursor: "pointer" }}>✕</button>
