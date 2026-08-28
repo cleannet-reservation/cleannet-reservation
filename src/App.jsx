@@ -307,6 +307,7 @@ function BookingFlow({ config }) {
         const svc = services.find(s => s.id === svcId);
         const opt = svc?.options.find(o => o.id === optId);
         if (opt?.priceType === "m2" && !(parseFloat(surfaces[svcId]) > 0)) return false;
+        if (opt?.priceType === "hour" && !(parseFloat(surfaces[svcId]) > 0)) return false;
       }
       return true;
     }
@@ -327,7 +328,9 @@ function BookingFlow({ config }) {
     const svc = services.find(s => s.id === svcId);
     const opt = svc?.options.find(o => o.id === optId);
     if (!opt) return total;
-    const price = opt.priceType === "m2" ? Number(opt.price) * (parseFloat(surfaces[svcId]) || 0) : Number(opt.price);
+    const price = opt.priceType === "m2" || opt.priceType === "hour"
+      ? Number(opt.price) * (parseFloat(surfaces[svcId]) || 0)
+      : Number(opt.price);
     return total + price;
   }, 0);
 
@@ -517,6 +520,9 @@ _Envoyé depuis le site de réservation CleanNet_`
   const totalDuration = Object.entries(selectedServices).reduce((total, [svcId, optId]) => {
     const svc = services.find(s => s.id === svcId);
     const opt = svc?.options.find(o => o.id === optId);
+    if (opt?.priceType === "hour") {
+      return total + (parseFloat(surfaces[svcId]) || 1) * 60;
+    }
     return total + (Number(opt?.duration) || 60);
   }, 0);
 
@@ -565,7 +571,7 @@ _Envoyé depuis le site de réservation CleanNet_`
                             style={{ border: `1.5px solid ${selectedOptId === opt.id ? color : "#E5E7EB"}`, background: selectedOptId === opt.id ? color + "11" : "#F7F8FC", borderRadius: 8, padding: "10px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <span style={{ fontWeight: 600, fontSize: 14 }}>{opt.label}</span>
                             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                              <span style={{ fontWeight: 800, color }}>{opt.priceType === "m2" ? `${fmt(opt.price)}/m²` : fmt(opt.price)}</span>
+                              <span style={{ fontWeight: 800, color }}>{opt.priceType === "m2" ? `${fmt(opt.price)}/m²` : opt.priceType === "hour" ? `${fmt(opt.price)}/h` : fmt(opt.price)}</span>
                               <span style={{ fontSize: 12, color: "#9CA3AF" }}>({fmtDurationTotal(Number(opt.duration)||60)})</span>
                               {selectedOptId === opt.id && <span style={{ background: color, color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>✓</span>}
                             </div>
@@ -586,6 +592,24 @@ _Envoyé depuis le site de réservation CleanNet_`
                             </div>
                           </div>
                         )}
+                        {/* Champ heures si prix/heure */}
+                        {selectedOpt?.priceType === "hour" && (
+                          <div style={{ background: "#EEF3FF", border: `1.5px solid ${color}`, borderRadius: 10, padding: "12px 14px", marginTop: 4 }}>
+                            <label style={{ fontSize: 13, fontWeight: 700, display: "block", marginBottom: 6 }}>⏱️ Combien d'heures pour {s.name} ?</label>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <input type="number" min="0.5" step="0.5" placeholder="ex: 2" value={surfaces[s.id] || ""}
+                                onChange={e => setSurfaces(prev => ({ ...prev, [s.id]: e.target.value }))}
+                                style={{ border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "8px 12px", fontSize: 15, width: 90, outline: "none" }} />
+                              <span style={{ color: "#6B7280" }}>heure(s)</span>
+                              {surfaces[s.id] && parseFloat(surfaces[s.id]) > 0 && (
+                                <span style={{ fontWeight: 800, color }}>= {fmt(Number(selectedOpt.price) * parseFloat(surfaces[s.id]))}</span>
+                              )}
+                            </div>
+                            <p style={{ fontSize: 11, color: "#6B7280", margin: "6px 0 0" }}>
+                              {parseFloat(surfaces[s.id]) || 0}h × {fmt(selectedOpt.price)}/h = <strong style={{ color }}>{fmt(Number(selectedOpt.price) * (parseFloat(surfaces[s.id]) || 0))}</strong>
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -600,7 +624,7 @@ _Envoyé depuis le site de réservation CleanNet_`
                 {Object.entries(selectedServices).map(([svcId, optId]) => {
                   const svc = services.find(s => s.id === svcId);
                   const opt = svc?.options.find(o => o.id === optId);
-                  const svcPrice = opt?.priceType === "m2" ? Number(opt.price) * (parseFloat(surfaces[svcId]) || 0) : Number(opt?.price || 0);
+                  const svcPrice = ["m2","hour"].includes(opt?.priceType) ? Number(opt.price) * (parseFloat(surfaces[svcId]) || 0) : Number(opt?.price || 0);
                   return (
                     <div key={svcId} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "3px 0" }}>
                       <span>{svc?.icon} {svc?.name} — {opt?.label}</span>
@@ -767,9 +791,9 @@ _Envoyé depuis le site de réservation CleanNet_`
               {Object.entries(selectedServices).map(([svcId, optId]) => {
                 const svc = services.find(s => s.id === svcId);
                 const opt = svc?.options.find(o => o.id === optId);
-                const price = opt?.priceType === "m2" ? Number(opt.price) * (parseFloat(surfaces[svcId]) || 0) : Number(opt?.price || 0);
+                const price = ["m2","hour"].includes(opt?.priceType) ? Number(opt.price) * (parseFloat(surfaces[svcId]) || 0) : Number(opt?.price || 0);
                 return (
-                  <Row key={svcId} label={`${svc?.icon} ${svc?.name} — ${opt?.label}${opt?.priceType === "m2" ? ` (${surfaces[svcId]}m²)` : ""}`} val={fmt(price)} />
+                  <Row key={svcId} label={`${svc?.icon} ${svc?.name} — ${opt?.label}${opt?.priceType === "m2" ? ` (${surfaces[svcId]}m²)` : opt?.priceType === "hour" ? ` (${surfaces[svcId]}h)` : ""}`} val={fmt(price)} />
                 );
               })}
               {upsells.filter(u => (activeUpsells[u.id] || 0) > 0).map(u => (
@@ -2068,7 +2092,7 @@ function AdminPanel({ config, onSave, onClose }) {
                         </div>
                         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                           {/* Type de prix */}
-                          <div style={{ display: "flex", gap: 4 }}>
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                             <button onClick={() => updateOption(si, oi, "priceType", "fixed")}
                               style={{ padding: "6px 10px", fontSize: 12, fontWeight: 600, border: `1.5px solid ${!opt.priceType || opt.priceType === "fixed" ? color : "#E5E7EB"}`, borderRadius: 6, background: !opt.priceType || opt.priceType === "fixed" ? color + "15" : "#fff", color: !opt.priceType || opt.priceType === "fixed" ? color : "#6B7280", cursor: "pointer" }}>
                               💶 Prix fixe
@@ -2077,12 +2101,16 @@ function AdminPanel({ config, onSave, onClose }) {
                               style={{ padding: "6px 10px", fontSize: 12, fontWeight: 600, border: `1.5px solid ${opt.priceType === "m2" ? color : "#E5E7EB"}`, borderRadius: 6, background: opt.priceType === "m2" ? color + "15" : "#fff", color: opt.priceType === "m2" ? color : "#6B7280", cursor: "pointer" }}>
                               📐 Prix/m²
                             </button>
+                            <button onClick={() => updateOption(si, oi, "priceType", "hour")}
+                              style={{ padding: "6px 10px", fontSize: 12, fontWeight: 600, border: `1.5px solid ${opt.priceType === "hour" ? color : "#E5E7EB"}`, borderRadius: 6, background: opt.priceType === "hour" ? color + "15" : "#fff", color: opt.priceType === "hour" ? color : "#6B7280", cursor: "pointer" }}>
+                              ⏱️ Prix/heure
+                            </button>
                           </div>
                           {/* Prix */}
                           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                             <input type="number" value={opt.price} onChange={e => updateOption(si, oi, "price", e.target.value)}
                               style={{ ...inputStyle, width: 70 }} />
-                            <span style={{ fontSize: 12, color: "#6B7280" }}>{opt.priceType === "m2" ? "€/m²" : "€"}</span>
+                            <span style={{ fontSize: 12, color: "#6B7280" }}>{opt.priceType === "m2" ? "€/m²" : opt.priceType === "hour" ? "€/h" : "€"}</span>
                           </div>
                           {/* Durée */}
                           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -2094,6 +2122,11 @@ function AdminPanel({ config, onSave, onClose }) {
                         {opt.priceType === "m2" && (
                           <p style={{ fontSize: 11, color: "#6B7280", margin: "6px 0 0", fontStyle: "italic" }}>
                             💡 Le client entrera la surface et le prix sera calculé automatiquement
+                          </p>
+                        )}
+                        {opt.priceType === "hour" && (
+                          <p style={{ fontSize: 11, color: "#6B7280", margin: "6px 0 0", fontStyle: "italic" }}>
+                            💡 Le client entrera le nombre d'heures et le prix sera calculé automatiquement
                           </p>
                         )}
                       </div>
