@@ -425,7 +425,7 @@ function BookingFlow({ config }) {
         prenom: form.prenom, nom: form.nom,
         email: form.email, telephone: form.telephone,
         adresse: form.adresse,
-        service: service.name, option: option.label,
+        service: servicesLabel, option: "",
         date: form.date, creneau: `${form.timeSlot} → ${form.timeSlotEnd}`,
         total: fmt(subtotal), acompte: "0",
         statut: "attente", smsOnly: true,
@@ -440,7 +440,7 @@ function BookingFlow({ config }) {
 📧 *Email :* ${form.email}
 📍 *Adresse :* ${form.adresse}
 
-🧹 *Service :* ${service.name} — ${option.label}
+🧹 *Services :* ${servicesLabel}
 📅 *Date :* ${form.date}
 🕐 *Créneau :* ${form.timeSlot} → ${form.timeSlotEnd}
 💶 *Total estimé :* ${fmt(subtotal)}
@@ -449,7 +449,7 @@ ${form.message ? `📝 *Note :* ${form.message}` : ""}
 
 _Envoyé depuis le site de réservation CleanNet_`
     );
-    window.open(`https://wa.me/33612922048?text=${msg}`, "_blank");
+    window.open(`https://wa.me/${company.phone || "33612922048"}?text=${msg}`, "_blank");
     setRequestDone(true);
   };
 
